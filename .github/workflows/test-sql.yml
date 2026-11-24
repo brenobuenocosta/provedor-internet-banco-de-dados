@@ -1,0 +1,56 @@
+name: Teste dos scripts SQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  mysql:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          # Senha descartável, usada apenas neste contêiner de teste
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Executar os scripts na ordem
+        run: |
+          for f in 01_schema 02_povoamento 03_consultas 04a_updates 04b_deletes; do
+            echo "Executando sql/$f.sql"
+            mysql -h 127.0.0.1 -uroot -proot --default-character-set=utf8mb4 < "sql/$f.sql"
+          done
+
+      - name: Conferir a contagem final de registros
+        run: |
+          check() {
+            got=$(mysql -h 127.0.0.1 -uroot -proot -N -e "SELECT COUNT(*) FROM provedor_db.$1")
+            if [ "$got" != "$2" ]; then
+              echo "FALHA em $1: esperado $2, obtido $got"
+              exit 1
+            fi
+            echo "OK $1 = $got"
+          }
+          # Valores esperados depois de rodar 01 a 04b
+          check cidade 4
+          check cliente 5
+          check plano 4
+          check tecnico 2
+          check endereco 7
+          check contrato 6
+          check fatura 10
+          check pagamento 7
+          check chamado_suporte 5
